@@ -15,7 +15,6 @@ function resize() {
 resize();
 window.addEventListener('resize', resize);
 
-// Input: held keys + one-shot just-pressed set
 const keys = {};
 const keysJustPressed = new Set();
 window.addEventListener('keydown', e => {
@@ -25,7 +24,6 @@ window.addEventListener('keydown', e => {
 });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
 
-// Game objects
 const world     = new World(42);
 const spawn     = world.spawnPoint;
 const ship      = new Ship(spawn.x, spawn.y);
@@ -34,7 +32,13 @@ const starfield = new Starfield(42);
 const hud       = new HUD();
 const mobile    = new MobileControls(canvas, keys, keysJustPressed);
 
-const ORBIT_RANGE = 185; // px from planet edge to trigger prompt
+const ORBIT_RANGE    = 185;  // px from planet edge
+const DERELICT_RANGE = 220;  // px from derelict centre
+
+// Game state
+let nearPlanet   = null;
+let nearDerelict = null;
+let inspecting   = null;   // derelict currently shown in info panel
 
 let lastTime = 0;
 
@@ -43,25 +47,35 @@ function loop(timestamp) {
   lastTime = timestamp;
 
   // --- Proximity detection ---
-  let nearPlanet = null;
+  nearPlanet = null;
   if (!ship.orbiting) {
     for (const p of world.planets) {
       const dx = ship.x - p.x, dy = ship.y - p.y;
-      if (Math.sqrt(dx * dx + dy * dy) < p.radius + ORBIT_RANGE) {
-        nearPlanet = p;
-        break;
-      }
+      if (Math.sqrt(dx * dx + dy * dy) < p.radius + ORBIT_RANGE) { nearPlanet = p; break; }
     }
   }
 
-  // --- E key: enter/exit orbit ---
+  nearDerelict = null;
+  for (const d of world.derelicts.derelicts) {
+    const dx = ship.x - d.x, dy = ship.y - d.y;
+    if (Math.sqrt(dx * dx + dy * dy) < DERELICT_RANGE) { nearDerelict = d; break; }
+  }
+
+  // --- E key interactions (priority order) ---
   if (keysJustPressed.has('KeyE')) {
-    if (ship.orbiting) {
+    if (inspecting) {
+      inspecting = null;
+    } else if (ship.orbiting) {
       ship.exitOrbit();
+    } else if (nearDerelict) {
+      nearDerelict.discovered = true;
+      inspecting = nearDerelict;
     } else if (nearPlanet) {
       ship.enterOrbit(nearPlanet);
     }
   }
+
+  if (keysJustPressed.has('Escape')) inspecting = null;
 
   // --- Update ---
   world.update(dt);
@@ -80,31 +94,76 @@ function loop(timestamp) {
 
   world.draw(ctx, camera, canvas);
 
-  // Orbit prompt in world-space (floats above planet)
-  const promptTarget = ship.orbiting ? ship.orbitTarget : nearPlanet;
-  if (promptTarget) {
+  // Orbit prompt
+  const orbitTarget = ship.orbiting ? ship.orbitTarget : nearPlanet;
+  if (orbitTarget) {
     const label = ship.orbiting ? '[E]  Exit Orbit' : '[E]  Enter Orbit';
-    const py = promptTarget.y - promptTarget.radius - 32;
+    const py = orbitTarget.y - orbitTarget.radius - 32;
     ctx.font = 'bold 13px monospace';
     ctx.textAlign = 'center';
-    // Soft shadow
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillText(label, promptTarget.x + 1, py + 1);
+    ctx.fillText(label, orbitTarget.x + 1, py + 1);
     ctx.fillStyle = ship.orbiting ? 'rgba(120,255,200,0.95)' : 'rgba(200,255,140,0.9)';
-    ctx.fillText(label, promptTarget.x, py);
+    ctx.fillText(label, orbitTarget.x, py);
+  }
+
+  // Derelict inspect prompt
+  if (nearDerelict && !inspecting) {
+    ctx.font = 'bold 13px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillText('[E]  Inspect', nearDerelict.x + 1, nearDerelict.y - 47);
+    ctx.fillStyle = 'rgba(180,210,255,0.9)';
+    ctx.fillText('[E]  Inspect', nearDerelict.x, nearDerelict.y - 48);
   }
 
   ship.draw(ctx);
-
   ctx.restore();
 
   hud.draw(ctx, canvas, ship, camera, world);
+
+  // Derelict info panel (screen-space overlay)
+  if (inspecting) drawDerelictPanel(ctx, canvas, inspecting);
+
   mobile.draw(ctx);
-
-  // Clear one-shot keys at end of frame
   keysJustPressed.clear();
-
   requestAnimationFrame(loop);
+}
+
+function drawDerelictPanel(ctx, canvas, d) {
+  const pw = 420, ph = 150;
+  const px = (canvas.width  - pw) / 2;
+  const py = (canvas.height - ph) / 2;
+
+  ctx.fillStyle   = 'rgba(5,10,18,0.88)';
+  ctx.strokeStyle = 'rgba(140,170,200,0.5)';
+  ctx.lineWidth   = 1;
+  ctx.fillRect(px, py, pw, ph);
+  ctx.strokeRect(px, py, pw, ph);
+
+  ctx.fillStyle = 'rgba(180,210,255,0.9)';
+  ctx.font      = 'bold 14px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText(`— ${d.name} —`, px + 18, py + 26);
+
+  ctx.fillStyle = 'rgba(130,160,190,0.75)';
+  ctx.font      = '11px monospace';
+  // Wrap lore text at ~55 chars
+  const words = d.lore.split(' ');
+  let line = '', lineY = py + 52;
+  for (const word of words) {
+    const test = line ? line + ' ' + word : word;
+    if (test.length > 52) {
+      ctx.fillText(line, px + 18, lineY);
+      line = word; lineY += 18;
+    } else { line = test; }
+  }
+  if (line) ctx.fillText(line, px + 18, lineY);
+
+  ctx.fillStyle = 'rgba(100,140,180,0.55)';
+  ctx.font      = '10px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('[E] or [Esc] to close', canvas.width / 2, py + ph - 12);
 }
 
 requestAnimationFrame(ts => { lastTime = ts; requestAnimationFrame(loop); });

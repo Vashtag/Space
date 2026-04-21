@@ -21,7 +21,8 @@ window.addEventListener('keyup',   e => { keys[e.code] = false; });
 
 // Game objects
 const world     = new World(42);          // seed 42
-const ship      = new Ship(0, 0);
+const spawn     = world.spawnPoint;
+const ship      = new Ship(spawn.x, spawn.y);
 const camera    = new Camera(ship);
 const starfield = new Starfield(42);
 const hud       = new HUD();

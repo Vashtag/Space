@@ -1,4 +1,5 @@
 import { createRng } from './utils.js';
+import { StationManager } from './stations.js';
 
 const WORLD_RADIUS = 8000; // bounded solar system radius
 
@@ -78,15 +79,20 @@ export class World {
     for (let i = 0; i < count; i++) {
       this.planets.push(generatePlanet(rng, i));
     }
+
+    this.stationManager = new StationManager(rng);
   }
 
+  get stations() { return this.stationManager.stations; }
+  get spawnPoint() { return this.stationManager.spawnPoint; }
+
   update(dt) {
-    // Animate moon orbits
     for (const p of this.planets) {
       for (const m of p.moons) {
         m.angle += m.speed * dt;
       }
     }
+    this.stationManager.update(dt);
   }
 
   draw(ctx, camera, canvas) {
@@ -111,6 +117,7 @@ export class World {
     for (const p of this.planets) {
       this._drawPlanet(ctx, p, camera, canvas);
     }
+    this.stationManager.draw(ctx);
   }
 
   _drawSun(ctx) {

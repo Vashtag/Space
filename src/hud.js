@@ -85,6 +85,17 @@ export class HUD {
       ctx.fill();
     }
 
+    // Stations (small squares)
+    for (const s of world.stations) {
+      const sx = cx + s.x * MM_SCALE;
+      const sy = cy + s.y * MM_SCALE;
+      ctx.fillStyle = s.accentColor;
+      ctx.fillRect(sx - 3, sy - 3, 6, 6);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(sx - 3, sy - 3, 6, 6);
+    }
+
     // Ship
     const sx = cx + ship.x * MM_SCALE;
     const sy = cy + ship.y * MM_SCALE;

@@ -4,6 +4,7 @@ import { NebulaField } from './nebula.js';
 import { AsteroidField } from './asteroids.js';
 import { CometField } from './comets.js';
 import { DerelictField } from './derelicts.js';
+import { AnomalyField } from './anomalies.js';
 
 const WORLD_RADIUS = 20000;
 
@@ -95,6 +96,7 @@ export class World {
     this.asteroids      = new AsteroidField(seed);
     this.comets         = new CometField(rng);
     this.derelicts      = new DerelictField(seed, WORLD_RADIUS);
+    this.anomalies      = new AnomalyField(seed, WORLD_RADIUS);
   }
 
   get stations() { return this.stationManager.stations; }
@@ -113,6 +115,7 @@ export class World {
     this.asteroids.update(dt);
     this.comets.update(dt);
     this.derelicts.update(dt);
+    this.anomalies.update(dt);
   }
 
   draw(ctx, camera, canvas) {
@@ -146,6 +149,7 @@ export class World {
     }
     this.stationManager.draw(ctx);
     this.derelicts.draw(ctx);
+    this.anomalies.draw(ctx);
   }
 
   _drawSun(ctx) {

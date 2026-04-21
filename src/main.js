@@ -32,13 +32,15 @@ const starfield = new Starfield(42);
 const hud       = new HUD();
 const mobile    = new MobileControls(canvas, keys, keysJustPressed);
 
-const ORBIT_RANGE    = 185;  // px from planet edge
-const DERELICT_RANGE = 220;  // px from derelict centre
+const ORBIT_RANGE     = 185;
+const DERELICT_RANGE  = 220;
+const WORMHOLE_RANGE  = 80;
 
 // Game state
 let nearPlanet   = null;
 let nearDerelict = null;
-let inspecting   = null;   // derelict currently shown in info panel
+let nearWormhole = null;
+let inspecting   = null;
 
 let lastTime = 0;
 
@@ -61,12 +63,26 @@ function loop(timestamp) {
     if (Math.sqrt(dx * dx + dy * dy) < DERELICT_RANGE) { nearDerelict = d; break; }
   }
 
+  nearWormhole = null;
+  for (const w of world.anomalies.wormholes) {
+    const dx = ship.x - w.x, dy = ship.y - w.y;
+    if (Math.sqrt(dx * dx + dy * dy) < WORMHOLE_RANGE) { nearWormhole = w; break; }
+  }
+
   // --- E key interactions (priority order) ---
   if (keysJustPressed.has('KeyE')) {
     if (inspecting) {
       inspecting = null;
     } else if (ship.orbiting) {
       ship.exitOrbit();
+    } else if (nearWormhole) {
+      const partner = world.anomalies.wormholes[nearWormhole.partnerId];
+      // Offset exit so ship doesn't immediately re-trigger
+      const exitAngle = Math.atan2(partner.y, partner.x) + Math.PI;
+      ship.x = partner.x + Math.cos(exitAngle) * 100;
+      ship.y = partner.y + Math.sin(exitAngle) * 100;
+      ship.vx *= 0.3; ship.vy *= 0.3;
+      camera.x = ship.x; camera.y = ship.y;
     } else if (nearDerelict) {
       nearDerelict.discovered = true;
       inspecting = nearDerelict;
@@ -81,6 +97,7 @@ function loop(timestamp) {
   world.update(dt);
   ship.update(dt, keys);
   world.asteroids.checkCollisions(ship);
+  world.anomalies.applyGravity(ship, dt);
   camera.update(dt, canvas);
 
   // --- Draw ---
@@ -105,6 +122,16 @@ function loop(timestamp) {
     ctx.fillText(label, orbitTarget.x + 1, py + 1);
     ctx.fillStyle = ship.orbiting ? 'rgba(120,255,200,0.95)' : 'rgba(200,255,140,0.9)';
     ctx.fillText(label, orbitTarget.x, py);
+  }
+
+  // Wormhole enter prompt
+  if (nearWormhole) {
+    ctx.font = 'bold 13px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillText('[E]  Enter Wormhole', nearWormhole.x + 1, nearWormhole.y - 37);
+    ctx.fillStyle = 'rgba(200,140,255,0.95)';
+    ctx.fillText('[E]  Enter Wormhole', nearWormhole.x, nearWormhole.y - 38);
   }
 
   // Derelict inspect prompt

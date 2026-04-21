@@ -26,6 +26,9 @@ export class Ship {
     this.orbitRadius  = 0;
     this.orbitAngle   = 0;
     this.orbitSpeed   = 0;
+
+    // Engine particles
+    this.particles = [];
   }
 
   applyCollision(nx, ny, overlap) {
@@ -81,6 +84,12 @@ export class Ship {
         this.thrusting = false;
         this.boosting  = false;
         this.engineFlicker = 0;
+        // Age particles even while orbiting so they don't freeze in place
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+          const p = this.particles[i];
+          p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
+          if (p.life <= 0) this.particles.splice(i, 1);
+        }
         return;
       }
     }
@@ -136,6 +145,36 @@ export class Ship {
 
     this.engineFlicker = Math.random();
     if (this.hitFlash > 0) this.hitFlash = Math.max(0, this.hitFlash - dt);
+
+    // Emit engine particles
+    if (this.thrusting) {
+      const nx = this.x - Math.cos(this.angle) * 10;
+      const ny = this.y - Math.sin(this.angle) * 10;
+      const count = this.boosting ? 3 : 2;
+      for (let i = 0; i < count; i++) {
+        const spread = (Math.random() - 0.5) * 0.7;
+        const spd    = this.boosting ? 160 + Math.random() * 140 : 70 + Math.random() * 70;
+        const life   = this.boosting ? 0.30 + Math.random() * 0.20 : 0.22 + Math.random() * 0.14;
+        this.particles.push({
+          x: nx + (Math.random() - 0.5) * 5,
+          y: ny + (Math.random() - 0.5) * 5,
+          vx: -Math.cos(this.angle + spread) * spd + this.vx * 0.25,
+          vy: -Math.sin(this.angle + spread) * spd + this.vy * 0.25,
+          life,
+          maxLife: life,
+          boost: this.boosting,
+        });
+      }
+    }
+
+    // Age and cull particles
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      const p = this.particles[i];
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.life -= dt;
+      if (p.life <= 0) this.particles.splice(i, 1);
+    }
   }
 
   get speed() {
@@ -143,6 +182,22 @@ export class Ship {
   }
 
   draw(ctx) {
+    // Particles are in world space — draw before hull so they appear behind
+    for (const p of this.particles) {
+      const t = p.life / p.maxLife;      // 1 = fresh, 0 = dead
+      const radius = 0.4 + (1 - t) * (p.boost ? 3.5 : 2.5);
+      ctx.globalAlpha = t * (p.boost ? 0.75 : 0.65);
+      if (p.boost) {
+        ctx.fillStyle = `hsl(${200 + (1 - t) * 40},100%,${70 + t * 20}%)`;
+      } else {
+        ctx.fillStyle = `hsl(${30 - (1 - t) * 25},100%,${55 + t * 20}%)`;
+      }
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle + Math.PI / 2);

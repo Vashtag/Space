@@ -25,8 +25,8 @@ export class Starfield {
       ctx.globalAlpha = cfg.alpha;
       for (const s of stars) {
         // Wrap star position with parallax offset
-        const px = ((s.nx * W + camera.x * cfg.speed) % W + W) % W;
-        const py = ((s.ny * H + camera.y * cfg.speed) % H + H) % H;
+        const px = ((s.nx * W - camera.x * cfg.speed) % W + W) % W;
+        const py = ((s.ny * H - camera.y * cfg.speed) % H + H) % H;
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
         ctx.arc(px, py, s.r, 0, Math.PI * 2);

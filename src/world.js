@@ -2,6 +2,7 @@ import { createRng } from './utils.js';
 import { StationManager } from './stations.js';
 import { NebulaField } from './nebula.js';
 import { AsteroidField } from './asteroids.js';
+import { CometField } from './comets.js';
 
 const WORLD_RADIUS = 20000;
 
@@ -91,6 +92,7 @@ export class World {
     this.stationManager = new StationManager(rng);
     this.nebulae        = new NebulaField(seed, WORLD_RADIUS);
     this.asteroids      = new AsteroidField(seed);
+    this.comets         = new CometField(rng);
   }
 
   get stations() { return this.stationManager.stations; }
@@ -107,6 +109,7 @@ export class World {
     }
     this.stationManager.update(dt);
     this.asteroids.update(dt);
+    this.comets.update(dt);
   }
 
   draw(ctx, camera, canvas) {
@@ -124,6 +127,7 @@ export class World {
 
     // Nebulae drawn first, behind everything
     this.nebulae.draw(ctx);
+    this.comets.draw(ctx);
 
     this._drawSun(ctx);
 

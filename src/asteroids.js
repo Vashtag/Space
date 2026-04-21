@@ -16,12 +16,13 @@ function makeRock(rng, beltRadius, beltWidth) {
     verts.push([Math.cos(a) * rv, Math.sin(a) * rv]);
   }
   return {
-    x:        Math.cos(angle) * r,
-    y:        Math.sin(angle) * r,
+    x:               Math.cos(angle) * r,
+    y:               Math.sin(angle) * r,
     rotation,
     rotSpeed,
     verts,
-    color: ROCK_COLORS[Math.floor(rng() * ROCK_COLORS.length)],
+    color:           ROCK_COLORS[Math.floor(rng() * ROCK_COLORS.length)],
+    collisionRadius: size * 1.1,
   };
 }
 
@@ -38,6 +39,23 @@ export class AsteroidField {
     this.belts   = BELT_CONFIGS.map(([radius, width, count]) =>
       Array.from({ length: count }, () => makeRock(rng, radius, width))
     );
+  }
+
+  checkCollisions(ship) {
+    if (ship.orbiting) return;
+    const SR = 13; // ship collision radius
+    for (const belt of this.belts) {
+      for (const rock of belt) {
+        const dx  = ship.x - rock.x;
+        const dy  = ship.y - rock.y;
+        const d2  = dx * dx + dy * dy;
+        const min = SR + rock.collisionRadius;
+        if (d2 < min * min && d2 > 0) {
+          const d  = Math.sqrt(d2);
+          ship.applyCollision(dx / d, dy / d, min - d);
+        }
+      }
+    }
   }
 
   update(dt) {

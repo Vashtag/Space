@@ -65,6 +65,7 @@ function loop(timestamp) {
 
   // --- Update ---
   ship.update(dt, keys);
+  world.asteroids.checkCollisions(ship);
   camera.update(dt, canvas);
 
   // --- Draw ---

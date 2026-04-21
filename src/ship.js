@@ -14,10 +14,11 @@ export class Ship {
     this.vx = 0;
     this.vy = 0;
     this.angle = -Math.PI / 2; // pointing up
-    this.thrusting  = false;
-    this.boosting   = false;
-    this.boostCharge = 1.0;    // 0–1, starts full
+    this.thrusting   = false;
+    this.boosting    = false;
+    this.boostCharge = 1.0;
     this.engineFlicker = 0;
+    this.hitFlash    = 0;      // seconds remaining of hit feedback
 
     // Orbit state
     this.orbiting     = false;
@@ -25,6 +26,21 @@ export class Ship {
     this.orbitRadius  = 0;
     this.orbitAngle   = 0;
     this.orbitSpeed   = 0;
+  }
+
+  applyCollision(nx, ny, overlap) {
+    // Push ship out of rock
+    this.x += nx * overlap;
+    this.y += ny * overlap;
+    // Reflect velocity along collision normal, then dampen
+    const dot = this.vx * nx + this.vy * ny;
+    if (dot < 0) {             // only react if moving toward the rock
+      this.vx -= 1.6 * dot * nx;
+      this.vy -= 1.6 * dot * ny;
+      this.vx *= 0.65;
+      this.vy *= 0.65;
+    }
+    this.hitFlash = 0.28;
   }
 
   enterOrbit(planet) {
@@ -119,6 +135,7 @@ export class Ship {
     this.y += this.vy * dt;
 
     this.engineFlicker = Math.random();
+    if (this.hitFlash > 0) this.hitFlash = Math.max(0, this.hitFlash - dt);
   }
 
   get speed() {
@@ -185,6 +202,22 @@ export class Ship {
     ctx.beginPath();
     ctx.ellipse(0, 8, 3, 2, 0, 0, Math.PI * 2);
     ctx.fill();
+
+    // Hit flash — red tint over hull, fades out
+    if (this.hitFlash > 0) {
+      ctx.globalAlpha = (this.hitFlash / 0.28) * 0.55;
+      ctx.fillStyle = '#ff3020';
+      ctx.beginPath();
+      ctx.moveTo(0, -16);
+      ctx.lineTo(10, 10);
+      ctx.lineTo(6, 6);
+      ctx.lineTo(0, 9);
+      ctx.lineTo(-6, 6);
+      ctx.lineTo(-10, 10);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
 
     ctx.restore();
   }

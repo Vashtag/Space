@@ -1,6 +1,6 @@
 const MM_SIZE   = 160;  // minimap square size
 const MM_PAD    = 16;   // padding from corner
-const MM_SCALE  = MM_SIZE / 2 / 8000; // world radius → minimap
+const MM_SCALE  = MM_SIZE / 2 / 20000; // world radius → minimap
 
 export class HUD {
   draw(ctx, canvas, ship, camera, world) {

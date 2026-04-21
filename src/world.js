@@ -2,8 +2,11 @@ import { createRng } from './utils.js';
 import { StationManager } from './stations.js';
 import { NebulaField } from './nebula.js';
 import { AsteroidField } from './asteroids.js';
+import { CometField } from './comets.js';
+import { DerelictField } from './derelicts.js';
+import { AnomalyField } from './anomalies.js';
 
-const WORLD_RADIUS = 8000; // bounded solar system radius
+const WORLD_RADIUS = 20000;
 
 const PLANET_TYPES = [
   { name: 'rocky',    colors: ['#8B7355','#A0856C','#7A6248'], atmo: 'rgba(180,140,80,0.15)' },
@@ -17,8 +20,8 @@ const PLANET_TYPES = [
 
 function generatePlanet(rng, index) {
   const angle  = rng() * Math.PI * 2;
-  const minR   = 800 + index * 600;
-  const maxR   = minR + 500;
+  const minR   = 1200 + index * 1400;
+  const maxR   = minR + 800;
   const r      = minR + rng() * (maxR - minR);
   const type   = PLANET_TYPES[Math.floor(rng() * PLANET_TYPES.length)];
   const radius = 28 + rng() * 52;
@@ -80,6 +83,8 @@ export class World {
       color2: '#FF9A00',
       glowColor: 'rgba(255,200,50,0.12)',
     };
+    this._flares = [];
+    this._flareTimer = 8 + rng() * 8; // seconds until next flare
 
     // 6-9 planets
     const count = 6 + Math.floor(rng() * 4);
@@ -91,12 +96,35 @@ export class World {
     this.stationManager = new StationManager(rng);
     this.nebulae        = new NebulaField(seed, WORLD_RADIUS);
     this.asteroids      = new AsteroidField(seed);
+    this.comets         = new CometField(rng);
+    this.derelicts      = new DerelictField(seed, WORLD_RADIUS);
+    this.anomalies      = new AnomalyField(seed, WORLD_RADIUS);
   }
 
   get stations() { return this.stationManager.stations; }
   get spawnPoint() { return this.stationManager.spawnPoint; }
 
   update(dt) {
+    // Solar flare spawning
+    this._flareTimer -= dt;
+    if (this._flareTimer <= 0) {
+      const rng = createRng(Date.now() ^ 0xF1A2E3);
+      const angle = rng() * Math.PI * 2;
+      this._flares.push({
+        angle,
+        life: 0,
+        maxLife: 1.6 + rng() * 0.8,
+        length: this.sun.radius * (0.9 + rng() * 1.4),
+        width:  this.sun.radius * (0.18 + rng() * 0.22),
+        curve:  (rng() - 0.5) * 1.2,
+      });
+      this._flareTimer = 8 + rng() * 14;
+    }
+    for (let i = this._flares.length - 1; i >= 0; i--) {
+      this._flares[i].life += dt;
+      if (this._flares[i].life >= this._flares[i].maxLife) this._flares.splice(i, 1);
+    }
+
     for (const p of this.planets) {
       p.orbitAngle += p.orbitSpeed * dt;
       p.x = Math.cos(p.orbitAngle) * p.orbitRadius;
@@ -107,6 +135,9 @@ export class World {
     }
     this.stationManager.update(dt);
     this.asteroids.update(dt);
+    this.comets.update(dt);
+    this.derelicts.update(dt);
+    this.anomalies.update(dt);
   }
 
   draw(ctx, camera, canvas) {
@@ -124,6 +155,7 @@ export class World {
 
     // Nebulae drawn first, behind everything
     this.nebulae.draw(ctx);
+    this.comets.draw(ctx);
 
     this._drawSun(ctx);
 
@@ -138,10 +170,61 @@ export class World {
       this._drawPlanet(ctx, p, camera, canvas);
     }
     this.stationManager.draw(ctx);
+    this.derelicts.draw(ctx);
+    this.anomalies.draw(ctx);
   }
 
   _drawSun(ctx) {
     const s = this.sun;
+
+    // Solar flares (drawn behind sun body)
+    for (const f of this._flares) {
+      const t = f.life / f.maxLife;           // 0→1 over lifetime
+      // Ease: rise fast (0→0.3), then fade slow (0.3→1)
+      const alpha = t < 0.3
+        ? (t / 0.3) * 0.72
+        : (1 - (t - 0.3) / 0.7) * 0.72;
+      const ext = t < 0.3
+        ? (t / 0.3)
+        : 1 - (t - 0.3) / 0.7 * 0.4;        // slight retraction as it fades
+
+      ctx.save();
+      ctx.translate(s.x, s.y);
+      ctx.rotate(f.angle);
+
+      const baseR = s.radius * 0.92;
+      const tipR  = baseR + f.length * ext;
+      const hw    = f.width * (1 - t * 0.5);  // narrows as it fades
+
+      // Arch: control point offset perpendicular by curve amount
+      const cpx = f.curve * hw * 3;
+      const cpy = (baseR + tipR) / 2;
+
+      const grad = ctx.createLinearGradient(0, baseR, 0, tipR);
+      grad.addColorStop(0,   `rgba(255,220,80,${alpha})`);
+      grad.addColorStop(0.4, `rgba(255,140,30,${alpha * 0.75})`);
+      grad.addColorStop(1,   `rgba(255,80,10,0)`);
+      ctx.fillStyle = grad;
+
+      ctx.beginPath();
+      ctx.moveTo(-hw, baseR);
+      ctx.quadraticCurveTo(cpx - hw * 0.5, cpy, 0, tipR);
+      ctx.quadraticCurveTo(cpx + hw * 0.5, cpy, hw, baseR);
+      ctx.closePath();
+      ctx.fill();
+
+      // Bright core streak
+      ctx.globalAlpha = alpha * 0.6;
+      ctx.strokeStyle = `rgba(255,245,180,0.9)`;
+      ctx.lineWidth   = Math.max(0.5, hw * 0.25);
+      ctx.beginPath();
+      ctx.moveTo(0, baseR);
+      ctx.quadraticCurveTo(cpx, cpy, 0, tipR);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      ctx.restore();
+    }
 
     // Outer corona layers
     for (let i = 3; i >= 0; i--) {

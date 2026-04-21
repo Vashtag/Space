@@ -2,11 +2,11 @@ export class StationManager {
   constructor(rng) {
     const a1 = rng() * Math.PI * 2;
     const a2 = rng() * Math.PI * 2;
-    const r2 = 3800 + rng() * 1400;
+    const r2 = 9000 + rng() * 4000;
 
     this.stations = [
       {
-        x: Math.cos(a1) * 1500,
+        x: Math.cos(a1) * 3500,
         y: Math.sin(a1) * 1500,
         rotation: 0,
         name: 'Station Alpha',
@@ -28,7 +28,7 @@ export class StationManager {
 
   get spawnPoint() {
     const s = this.stations[0];
-    return { x: s.x + 110, y: s.y + 40 };
+    return { x: s.x + 130, y: s.y + 50 };
   }
 
   update(dt) {

@@ -3,7 +3,7 @@ import { StationManager } from './stations.js';
 import { NebulaField } from './nebula.js';
 import { AsteroidField } from './asteroids.js';
 
-const WORLD_RADIUS = 8000; // bounded solar system radius
+const WORLD_RADIUS = 20000;
 
 const PLANET_TYPES = [
   { name: 'rocky',    colors: ['#8B7355','#A0856C','#7A6248'], atmo: 'rgba(180,140,80,0.15)' },
@@ -17,8 +17,8 @@ const PLANET_TYPES = [
 
 function generatePlanet(rng, index) {
   const angle  = rng() * Math.PI * 2;
-  const minR   = 800 + index * 600;
-  const maxR   = minR + 500;
+  const minR   = 1200 + index * 1400;
+  const maxR   = minR + 800;
   const r      = minR + rng() * (maxR - minR);
   const type   = PLANET_TYPES[Math.floor(rng() * PLANET_TYPES.length)];
   const radius = 28 + rng() * 52;

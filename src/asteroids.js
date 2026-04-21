@@ -28,9 +28,9 @@ function makeRock(rng, beltRadius, beltWidth) {
 
 // Belt configs: [orbitRadius, beltWidth, rockCount]
 const BELT_CONFIGS = [
-  [2100, 280, 30],
-  [3700, 320, 38],
-  [5600, 260, 26],
+  [ 5000, 350, 35],
+  [ 9500, 420, 45],
+  [14500, 320, 30],
 ];
 
 export class AsteroidField {

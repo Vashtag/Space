@@ -43,9 +43,25 @@ let nearDerelict = null;
 let nearWormhole = null;
 let nearStation  = null;
 let inspecting   = null;
-let dockedAt     = null;   // station object while docked
+let dockedAt     = null;
 let dockMenuIdx  = 0;
 const DOCK_MENU  = ['REFUEL', 'SAVE', 'LEAVE'];
+
+// Planet scanning
+const SCAN_TIME  = 3.0;   // seconds to complete
+let scanTarget   = null;
+let scanProgress = 0;     // 0–1
+
+const RESOURCES = {
+  rocky:    ['Iron Ore', 'Silicates', 'Rare Earth'],
+  oceanic:  ['Water Ice', 'Organic Compounds', 'Hydrogen'],
+  gas:      ['Helium-3', 'Ammonia', 'Methane'],
+  frozen:   ['Water Ice', 'Carbon', 'Nitrogen'],
+  volcanic: ['Iron', 'Sulfur', 'Titanium'],
+  jungle:   ['Organic Compounds', 'Oxygen', 'Biomass'],
+  desert:   ['Silicon', 'Iron Oxide', 'Rare Earth'],
+};
+const DANGERS = ['Safe', 'Moderate', 'Hostile', 'Extreme'];
 
 let lastTime = 0;
 
@@ -132,6 +148,25 @@ function loop(timestamp) {
     if (keysJustPressed.has('Escape')) inspecting = null;
   }
 
+  // --- Planet scanning (hold F) ---
+  const scanning = (keys['KeyF'] || keys['F']) && nearPlanet && !dockedAt && !ship.orbiting;
+  if (scanning) {
+    if (scanTarget !== nearPlanet) { scanTarget = nearPlanet; scanProgress = 0; }
+    scanProgress = Math.min(1, scanProgress + dt / SCAN_TIME);
+    if (scanProgress >= 1 && !nearPlanet.scanData) {
+      // Seed scan results from planet position (deterministic)
+      const seed = Math.abs(Math.round(nearPlanet.x * 7 + nearPlanet.y * 13)) % 4;
+      const res  = RESOURCES[nearPlanet.type] || RESOURCES.rocky;
+      nearPlanet.scanData = {
+        resources: res.slice(0, 2 + (seed % 2)),
+        danger:    DANGERS[seed],
+        temp:      Math.round(-200 + (nearPlanet.orbitRadius / 20000) * 600) + '°C',
+      };
+    }
+  } else {
+    if (scanTarget && scanTarget !== nearPlanet) { scanTarget = null; scanProgress = 0; }
+  }
+
   // --- Update ---
   world.update(dt);
   if (!dockedAt) {
@@ -190,6 +225,32 @@ function loop(timestamp) {
     ctx.fillText('[E]  Inspect', nearDerelict.x, nearDerelict.y - 48);
   }
 
+  // Scan ring (world-space, around planet)
+  if (scanTarget && scanProgress < 1) {
+    const p = scanTarget;
+    const ringR = p.radius + 22;
+    ctx.strokeStyle = 'rgba(80,255,180,0.7)';
+    ctx.lineWidth   = 2;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, ringR, -Math.PI / 2, -Math.PI / 2 + scanProgress * Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(80,255,180,0.2)';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, ringR, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle  = 'rgba(80,255,180,0.9)';
+    ctx.font       = '11px monospace';
+    ctx.textAlign  = 'center';
+    ctx.fillText(`SCANNING  ${Math.round(scanProgress * 100)}%`, p.x, p.y - p.radius - 18);
+  }
+  // Scan complete indicator + [F] hint
+  if (nearPlanet && !nearPlanet.scanData && !(scanTarget === nearPlanet && scanProgress > 0)) {
+    ctx.fillStyle = 'rgba(80,200,140,0.7)';
+    ctx.font = '11px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('[F] Scan', nearPlanet.x, nearPlanet.y + nearPlanet.radius + 32);
+  }
+
   ship.draw(ctx);
   ctx.restore();
 
@@ -197,6 +258,7 @@ function loop(timestamp) {
 
   if (inspecting)  drawDerelictPanel(ctx, canvas, inspecting);
   if (dockedAt)    drawDockMenu(ctx, canvas, dockedAt, dockMenuIdx);
+  if (nearPlanet && nearPlanet.scanData) drawScanResults(ctx, canvas, nearPlanet);
 
   mobile.draw(ctx);
   keysJustPressed.clear();
@@ -263,6 +325,25 @@ function drawDockMenu(ctx, canvas, station, idx) {
 
   ctx.fillStyle = 'rgba(100,130,160,0.5)'; ctx.font = '10px monospace';
   ctx.fillText('W/S navigate  ·  E select  ·  Esc leave', canvas.width / 2, py + ph - 14);
+}
+
+function drawScanResults(ctx, canvas, p) {
+  const d   = p.scanData;
+  const pw  = 240, ph = 110;
+  const px  = canvas.width - pw - 200, py = 16; // top-right area, left of minimap
+  ctx.fillStyle   = 'rgba(4,12,8,0.88)';
+  ctx.strokeStyle = 'rgba(80,220,150,0.5)';
+  ctx.lineWidth   = 1;
+  ctx.fillRect(px, py, pw, ph);
+  ctx.strokeRect(px, py, pw, ph);
+  ctx.fillStyle = 'rgba(80,220,150,0.9)'; ctx.font = 'bold 12px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText(`◉  ${p.name} — SCANNED`, px + 12, py + 20);
+  ctx.fillStyle = 'rgba(140,200,170,0.75)'; ctx.font = '11px monospace';
+  ctx.fillText(`Type:       ${p.type}`,            px + 12, py + 40);
+  ctx.fillText(`Temp:       ${d.temp}`,             px + 12, py + 56);
+  ctx.fillText(`Danger:     ${d.danger}`,           px + 12, py + 72);
+  ctx.fillText(`Resources:  ${d.resources.join(', ')}`, px + 12, py + 88);
 }
 
 requestAnimationFrame(ts => { lastTime = ts; requestAnimationFrame(loop); });

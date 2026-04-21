@@ -3,6 +3,7 @@ import { Ship } from './ship.js';
 import { Camera } from './camera.js';
 import { World } from './world.js';
 import { HUD } from './hud.js';
+import { MobileControls } from './mobileControls.js';
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -31,6 +32,7 @@ const ship      = new Ship(spawn.x, spawn.y);
 const camera    = new Camera(ship);
 const starfield = new Starfield(42);
 const hud       = new HUD();
+const mobile    = new MobileControls(canvas, keys, keysJustPressed);
 
 const ORBIT_RANGE = 185; // px from planet edge to trigger prompt
 
@@ -95,6 +97,7 @@ function loop(timestamp) {
   ctx.restore();
 
   hud.draw(ctx, canvas, ship, camera, world);
+  mobile.draw(ctx);
 
   // Clear one-shot keys at end of frame
   keysJustPressed.clear();

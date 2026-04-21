@@ -8,6 +8,21 @@ export class HUD {
     this._drawCoords(ctx, canvas, ship);
     this._drawMinimap(ctx, canvas, ship, world);
     this._drawControls(ctx, canvas);
+    if (ship.orbiting && ship.orbitTarget) {
+      this._drawOrbitStatus(ctx, canvas, ship);
+    }
+  }
+
+  _drawOrbitStatus(ctx, canvas, ship) {
+    const label = `⊙  ORBITING  ${ship.orbitTarget.name}`;
+    const bx = canvas.width / 2;
+    const by = 28;
+    ctx.font = '12px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(bx - 110, by - 16, 220, 22);
+    ctx.fillStyle = 'rgba(120,255,200,0.85)';
+    ctx.fillText(label, bx, by);
   }
 
   _drawSpeedometer(ctx, canvas, ship) {

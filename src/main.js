@@ -14,46 +14,90 @@ function resize() {
 resize();
 window.addEventListener('resize', resize);
 
-// Input state
+// Input: held keys + one-shot just-pressed set
 const keys = {};
-window.addEventListener('keydown', e => { keys[e.code] = true; e.preventDefault(); });
-window.addEventListener('keyup',   e => { keys[e.code] = false; });
+const keysJustPressed = new Set();
+window.addEventListener('keydown', e => {
+  if (!keys[e.code]) keysJustPressed.add(e.code);
+  keys[e.code] = true;
+  e.preventDefault();
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
 
 // Game objects
-const world     = new World(42);          // seed 42
-const ship      = new Ship(0, 0);
+const world     = new World(42);
+const spawn     = world.spawnPoint;
+const ship      = new Ship(spawn.x, spawn.y);
 const camera    = new Camera(ship);
 const starfield = new Starfield(42);
 const hud       = new HUD();
 
+const ORBIT_RANGE = 185; // px from planet edge to trigger prompt
+
 let lastTime = 0;
 
 function loop(timestamp) {
-  const dt = Math.min((timestamp - lastTime) / 1000, 0.05); // cap at 50ms
+  const dt = Math.min((timestamp - lastTime) / 1000, 0.05);
   lastTime = timestamp;
 
-  // Update
+  // --- Proximity detection ---
+  let nearPlanet = null;
+  if (!ship.orbiting) {
+    for (const p of world.planets) {
+      const dx = ship.x - p.x, dy = ship.y - p.y;
+      if (Math.sqrt(dx * dx + dy * dy) < p.radius + ORBIT_RANGE) {
+        nearPlanet = p;
+        break;
+      }
+    }
+  }
+
+  // --- E key: enter/exit orbit ---
+  if (keysJustPressed.has('KeyE')) {
+    if (ship.orbiting) {
+      ship.exitOrbit();
+    } else if (nearPlanet) {
+      ship.enterOrbit(nearPlanet);
+    }
+  }
+
+  // --- Update ---
   ship.update(dt, keys);
   camera.update(dt, canvas);
 
-  // Clear
+  // --- Draw ---
   ctx.fillStyle = '#00000f';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Draw starfield (screen-space, parallax offset from camera)
   starfield.draw(ctx, canvas, camera);
 
-  // World-space drawing
   ctx.save();
   ctx.translate(canvas.width / 2 - camera.x, canvas.height / 2 - camera.y);
 
   world.draw(ctx, camera, canvas);
+
+  // Orbit prompt in world-space (floats above planet)
+  const promptTarget = ship.orbiting ? ship.orbitTarget : nearPlanet;
+  if (promptTarget) {
+    const label = ship.orbiting ? '[E]  Exit Orbit' : '[E]  Enter Orbit';
+    const py = promptTarget.y - promptTarget.radius - 32;
+    ctx.font = 'bold 13px monospace';
+    ctx.textAlign = 'center';
+    // Soft shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillText(label, promptTarget.x + 1, py + 1);
+    ctx.fillStyle = ship.orbiting ? 'rgba(120,255,200,0.95)' : 'rgba(200,255,140,0.9)';
+    ctx.fillText(label, promptTarget.x, py);
+  }
+
   ship.draw(ctx);
 
   ctx.restore();
 
-  // HUD (screen-space)
   hud.draw(ctx, canvas, ship, camera, world);
+
+  // Clear one-shot keys at end of frame
+  keysJustPressed.clear();
 
   requestAnimationFrame(loop);
 }

@@ -1,4 +1,7 @@
 import { createRng } from './utils.js';
+import { StationManager } from './stations.js';
+import { NebulaField } from './nebula.js';
+import { AsteroidField } from './asteroids.js';
 
 const WORLD_RADIUS = 8000; // bounded solar system radius
 
@@ -78,15 +81,23 @@ export class World {
     for (let i = 0; i < count; i++) {
       this.planets.push(generatePlanet(rng, i));
     }
+
+    this.stationManager = new StationManager(rng);
+    this.nebulae        = new NebulaField(seed, WORLD_RADIUS);
+    this.asteroids      = new AsteroidField(seed);
   }
 
+  get stations() { return this.stationManager.stations; }
+  get spawnPoint() { return this.stationManager.spawnPoint; }
+
   update(dt) {
-    // Animate moon orbits
     for (const p of this.planets) {
       for (const m of p.moons) {
         m.angle += m.speed * dt;
       }
     }
+    this.stationManager.update(dt);
+    this.asteroids.update(dt);
   }
 
   draw(ctx, camera, canvas) {
@@ -103,14 +114,22 @@ export class World {
     ctx.setLineDash([]);
     ctx.restore();
 
+    // Nebulae drawn first, behind everything
+    this.nebulae.draw(ctx);
+
     this._drawSun(ctx);
 
     for (const p of this.planets) {
       this._drawOrbitLine(ctx, p);
     }
+
+    // Asteroid belts between orbit lines and planets
+    this.asteroids.draw(ctx);
+
     for (const p of this.planets) {
       this._drawPlanet(ctx, p, camera, canvas);
     }
+    this.stationManager.draw(ctx);
   }
 
   _drawSun(ctx) {

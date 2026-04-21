@@ -8,37 +8,71 @@ export class HUD {
     this._drawCoords(ctx, canvas, ship);
     this._drawMinimap(ctx, canvas, ship, world);
     this._drawControls(ctx, canvas);
+    if (ship.orbiting && ship.orbitTarget) {
+      this._drawOrbitStatus(ctx, canvas, ship);
+    }
+  }
+
+  _drawOrbitStatus(ctx, canvas, ship) {
+    const label = `⊙  ORBITING  ${ship.orbitTarget.name}`;
+    const bx = canvas.width / 2;
+    const by = 28;
+    ctx.font = '12px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(bx - 110, by - 16, 220, 22);
+    ctx.fillStyle = 'rgba(120,255,200,0.85)';
+    ctx.fillText(label, bx, by);
   }
 
   _drawSpeedometer(ctx, canvas, ship) {
-    const spd = Math.round(ship.speed);
+    const spd    = Math.round(ship.speed);
     const maxSpd = 420;
-    const barW = 120, barH = 8;
-    const bx = 20, by = canvas.height - 44;
+    const barW = 130, barH = 7;
+    const bx = 20;
+    const bySPD   = canvas.height - 32;
+    const byBoost = canvas.height - 58;
 
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fillRect(bx - 4, by - 20, barW + 8, 34);
-    ctx.strokeStyle = 'rgba(80,160,255,0.3)';
+    // Panel background (covers both bars)
+    ctx.fillStyle = 'rgba(0,0,0,0.52)';
+    ctx.fillRect(bx - 4, byBoost - 18, barW + 8, 54);
+    ctx.strokeStyle = 'rgba(80,160,255,0.25)';
     ctx.lineWidth = 1;
-    ctx.strokeRect(bx - 4, by - 20, barW + 8, 34);
+    ctx.strokeRect(bx - 4, byBoost - 18, barW + 8, 54);
 
+    // — BOOST bar —
+    ctx.fillStyle = 'rgba(40,60,140,0.4)';
+    ctx.fillRect(bx, byBoost, barW, barH);
+    const boostFill  = ship.boostCharge * barW;
+    const boostColor = ship.boostCharge < 0.15
+      ? '#ff3010'
+      : ship.boosting ? '#80d0ff' : '#4070e0';
+    ctx.fillStyle = boostColor;
+    ctx.fillRect(bx, byBoost, boostFill, barH);
+    ctx.fillStyle = '#8090c0';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'left';
+    const pct = Math.round(ship.boostCharge * 100);
+    const boostLabel = ship.boostCharge < 0.05
+      ? 'BOOST  RECHARGING'
+      : `BOOST ${pct.toString().padStart(3)}%  [SHIFT]`;
+    ctx.fillText(boostLabel, bx, byBoost - 5);
+
+    // — SPEED bar —
     ctx.fillStyle = 'rgba(60,100,180,0.4)';
-    ctx.fillRect(bx, by, barW, barH);
-
-    const fill = (spd / maxSpd) * barW;
+    ctx.fillRect(bx, bySPD, barW, barH);
+    const fill     = (Math.min(spd, maxSpd) / maxSpd) * barW;
     const barColor = spd > maxSpd * 0.8 ? '#ff6040' : '#40c8ff';
     ctx.fillStyle = barColor;
-    ctx.fillRect(bx, by, fill, barH);
-
+    ctx.fillRect(bx, bySPD, fill, barH);
     ctx.fillStyle = '#aacfff';
-    ctx.font = '11px monospace';
-    ctx.textAlign = 'left';
-    ctx.fillText(`SPD  ${spd.toString().padStart(3)} / ${maxSpd}`, bx, by - 6);
+    ctx.font = '10px monospace';
+    ctx.fillText(`SPD  ${spd.toString().padStart(3)}`, bx, bySPD - 4);
   }
 
   _drawCoords(ctx, canvas, ship) {
-    const bx = 20, by = canvas.height - 60;
-    ctx.fillStyle = 'rgba(140,180,255,0.6)';
+    const bx = 20, by = canvas.height - 82;
+    ctx.fillStyle = 'rgba(140,180,255,0.55)';
     ctx.font = '10px monospace';
     ctx.textAlign = 'left';
     ctx.fillText(
@@ -85,6 +119,17 @@ export class HUD {
       ctx.fill();
     }
 
+    // Stations (small squares)
+    for (const s of world.stations) {
+      const sx = cx + s.x * MM_SCALE;
+      const sy = cy + s.y * MM_SCALE;
+      ctx.fillStyle = s.accentColor;
+      ctx.fillRect(sx - 3, sy - 3, 6, 6);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(sx - 3, sy - 3, 6, 6);
+    }
+
     // Ship
     const sx = cx + ship.x * MM_SCALE;
     const sy = cy + ship.y * MM_SCALE;
@@ -108,12 +153,12 @@ export class HUD {
   }
 
   _drawControls(ctx, canvas) {
-    const lines = ['W/↑ Thrust', 'S/↓ Brake', 'A/← D/→ Rotate'];
+    const hints = ['W/↑ Thrust', 'S/↓ Brake', 'A/← D/→ Rotate', 'Shift Boost', 'E Orbit'];
     const bx = canvas.width / 2;
     const by = canvas.height - 14;
     ctx.fillStyle = 'rgba(80,100,160,0.5)';
     ctx.font = '10px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(lines.join('   ·   '), bx, by);
+    ctx.fillText(hints.join('   ·   '), bx, by);
   }
 }

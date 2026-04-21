@@ -167,9 +167,9 @@ export class World {
 
   _drawOrbitLine(ctx, p) {
     ctx.save();
-    ctx.strokeStyle = 'rgba(100,130,200,0.12)';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([6, 14]);
+    ctx.strokeStyle = 'rgba(120,150,220,0.28)';
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([2, 9]);
     ctx.beginPath();
     ctx.arc(0, 0, p.orbitRadius, 0, Math.PI * 2);
     ctx.stroke();

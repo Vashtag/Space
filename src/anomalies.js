@@ -2,7 +2,7 @@ import { createRng } from './utils.js';
 
 export class AnomalyField {
   constructor(seed, worldRadius) {
-    const rng = createRng(seed ^ 0xAB0DE1CF);
+    const rng = createRng(Date.now() ^ 0xAB0DE1CF);
     const R   = worldRadius;
 
     // 1 black hole in the outer system

@@ -40,8 +40,14 @@ function generatePlanet(rng, index) {
     });
   }
 
+  // Kepler-ish: outer planets orbit slower (ω ∝ r^-1.5 simplified to 1/√r)
+  const orbitSpeed = 1.2 / Math.sqrt(r);
+
   return {
-    x: Math.cos(angle) * r,
+    orbitRadius: r,
+    orbitAngle:  angle,
+    orbitSpeed,
+    x: Math.cos(angle) * r,   // kept as mutable fields, updated each frame
     y: Math.sin(angle) * r,
     radius,
     type: type.name,
@@ -92,6 +98,9 @@ export class World {
 
   update(dt) {
     for (const p of this.planets) {
+      p.orbitAngle += p.orbitSpeed * dt;
+      p.x = Math.cos(p.orbitAngle) * p.orbitRadius;
+      p.y = Math.sin(p.orbitAngle) * p.orbitRadius;
       for (const m of p.moons) {
         m.angle += m.speed * dt;
       }
@@ -101,7 +110,6 @@ export class World {
   }
 
   draw(ctx, camera, canvas) {
-    this.update(1 / 60); // approximate dt for world animations
 
     // World boundary ring
     ctx.save();
@@ -158,13 +166,12 @@ export class World {
   }
 
   _drawOrbitLine(ctx, p) {
-    const dist = Math.sqrt(p.x * p.x + p.y * p.y);
     ctx.save();
     ctx.strokeStyle = 'rgba(100,130,200,0.12)';
     ctx.lineWidth = 1;
     ctx.setLineDash([6, 14]);
     ctx.beginPath();
-    ctx.arc(0, 0, dist, 0, Math.PI * 2);
+    ctx.arc(0, 0, p.orbitRadius, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.restore();

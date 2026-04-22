@@ -13,6 +13,13 @@ export class StationManager {
         accentColor: '#40b8d0',
         glowRgb: '64,184,208',
         lightPhase: 0,
+        sells: [
+          { name: 'Fuel Cells',    key: 'fuelCells',   price: 40 },
+          { name: 'Bio-Canisters', key: 'bioCanisters', price: 35 },
+        ],
+        buys: [
+          { name: 'Ore',           key: 'ore',          price: 75 },
+        ],
       },
       {
         x: Math.cos(a2) * r2,
@@ -22,6 +29,13 @@ export class StationManager {
         accentColor: '#d08840',
         glowRgb: '208,136,64',
         lightPhase: Math.PI,
+        sells: [
+          { name: 'Ore',           key: 'ore',          price: 30 },
+        ],
+        buys: [
+          { name: 'Fuel Cells',    key: 'fuelCells',   price: 70 },
+          { name: 'Bio-Canisters', key: 'bioCanisters', price: 60 },
+        ],
       },
     ];
   }

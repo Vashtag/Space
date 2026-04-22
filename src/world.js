@@ -5,6 +5,8 @@ import { AsteroidField } from './asteroids.js';
 import { CometField } from './comets.js';
 import { DerelictField } from './derelicts.js';
 import { AnomalyField } from './anomalies.js';
+import { BulletPool } from './bullets.js';
+import { PirateField } from './pirates.js';
 
 const WORLD_RADIUS = 20000;
 
@@ -99,6 +101,8 @@ export class World {
     this.comets         = new CometField(rng);
     this.derelicts      = new DerelictField(seed, WORLD_RADIUS);
     this.anomalies      = new AnomalyField(seed, WORLD_RADIUS);
+    this.bullets        = new BulletPool();
+    this.pirates        = new PirateField(seed, WORLD_RADIUS);
   }
 
   get stations() { return this.stationManager.stations; }
@@ -138,6 +142,8 @@ export class World {
     this.comets.update(dt);
     this.derelicts.update(dt);
     this.anomalies.update(dt);
+    this.bullets.update(dt);
+    if (ship) this.pirates.update(dt, ship, this.bullets);
   }
 
   draw(ctx, camera, canvas) {
@@ -172,6 +178,8 @@ export class World {
     this.stationManager.draw(ctx);
     this.derelicts.draw(ctx);
     this.anomalies.draw(ctx);
+    this.pirates.draw(ctx);
+    this.bullets.draw(ctx);
   }
 
   _drawSun(ctx) {

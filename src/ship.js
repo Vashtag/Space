@@ -29,6 +29,15 @@ export class Ship {
 
     // Engine particles
     this.particles = [];
+
+    // Economy + combat
+    this.credits      = 150;
+    this.ammo         = 0;
+    this.cargo        = { ore: 0, fuelCells: 0, bioCanisters: 0 };
+    this.hull         = 100;
+    this.maxHull      = 100;
+    this.CARGO_MAX    = 10;
+    this.shootCooldown = 0;
   }
 
   applyCollision(nx, ny, overlap) {
@@ -67,6 +76,15 @@ export class Ship {
     this.vy =  Math.cos(this.orbitAngle) * linSpd;
     this.orbiting    = false;
     this.orbitTarget = null;
+  }
+
+  shoot(bullets) {
+    if (this.ammo <= 0 || this.shootCooldown > 0 || this.orbiting) return;
+    const nx = this.x + Math.cos(this.angle) * 20;
+    const ny = this.y + Math.sin(this.angle) * 20;
+    bullets.fire(nx, ny, this.angle, 840, true);
+    this.ammo--;
+    this.shootCooldown = 0.22;
   }
 
   update(dt, keys) {
@@ -144,7 +162,8 @@ export class Ship {
     this.y += this.vy * dt;
 
     this.engineFlicker = Math.random();
-    if (this.hitFlash > 0) this.hitFlash = Math.max(0, this.hitFlash - dt);
+    if (this.hitFlash     > 0) this.hitFlash     = Math.max(0, this.hitFlash     - dt);
+    if (this.shootCooldown > 0) this.shootCooldown = Math.max(0, this.shootCooldown - dt);
 
     // Emit engine particles
     if (this.thrusting) {

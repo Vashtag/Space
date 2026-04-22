@@ -45,12 +45,14 @@ let nearStation  = null;
 let inspecting   = null;
 let dockedAt     = null;
 let dockMenuIdx  = 0;
-const DOCK_MENU  = ['REFUEL', 'SAVE', 'LEAVE'];
+let dockMenu     = [];
+let dockMessage  = '';
+let dockMsgTimer = 0;
 
 // Planet scanning
-const SCAN_TIME  = 3.0;   // seconds to complete
+const SCAN_TIME  = 3.0;
 let scanTarget   = null;
-let scanProgress = 0;     // 0–1
+let scanProgress = 0;
 
 const RESOURCES = {
   rocky:    ['Iron Ore', 'Silicates', 'Rare Earth'],
@@ -62,6 +64,79 @@ const RESOURCES = {
   desert:   ['Silicon', 'Iron Oxide', 'Rare Earth'],
 };
 const DANGERS = ['Safe', 'Moderate', 'Hostile', 'Extreme'];
+
+// ── Dock menu helpers ─────────────────────────────────────────────────────────
+
+function cargoTotal() {
+  return Object.values(ship.cargo).reduce((a, b) => a + b, 0);
+}
+
+function showDockMsg(msg) { dockMessage = msg; dockMsgTimer = 1.8; }
+
+function buildDockMenu(station) {
+  const items = [];
+
+  items.push({
+    label: 'REFUEL + REPAIR', note: 'FREE',
+    action() { ship.boostCharge = 1.0; ship.hull = ship.maxHull; showDockMsg('Refuelled & repaired.'); },
+  });
+
+  items.push({
+    label: 'BUY AMMO  ×10', note: '50c',
+    disabled: ship.credits < 50,
+    action() {
+      if (ship.credits < 50) { showDockMsg('Not enough credits!'); return; }
+      ship.credits -= 50; ship.ammo += 10; showDockMsg('+10 ammo');
+    },
+  });
+
+  // Station sells → player buys
+  for (const item of station.sells) {
+    items.push({
+      label: `BUY ${item.name}`, note: `${item.price}c`,
+      disabled: ship.credits < item.price || cargoTotal() >= ship.CARGO_MAX,
+      action() {
+        if (ship.credits < item.price) { showDockMsg('Not enough credits!'); return; }
+        if (cargoTotal() >= ship.CARGO_MAX) { showDockMsg('Cargo hold full!'); return; }
+        ship.credits -= item.price; ship.cargo[item.key]++;
+        showDockMsg(`Bought ${item.name}.`);
+      },
+    });
+  }
+
+  // Station buys → player sells
+  for (const item of station.buys) {
+    const qty = ship.cargo[item.key] || 0;
+    items.push({
+      label: `SELL ${item.name}`,
+      note: qty > 0 ? `+${item.price}c  ×${qty}` : `+${item.price}c`,
+      disabled: qty === 0,
+      action() {
+        if ((ship.cargo[item.key] || 0) <= 0) { showDockMsg('Nothing to sell!'); return; }
+        ship.credits += item.price; ship.cargo[item.key]--;
+        showDockMsg(`Sold ${item.name}  +${item.price}c`);
+      },
+    });
+  }
+
+  items.push({
+    label: 'SAVE', note: '',
+    action() {
+      try {
+        localStorage.setItem('spaceSave', JSON.stringify({
+          x: Math.round(ship.x), y: Math.round(ship.y),
+        }));
+      } catch (_) {}
+      showDockMsg('Game saved.');
+    },
+  });
+
+  items.push({ label: 'LEAVE', note: '', action() { dockedAt = null; } });
+
+  return items;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 let lastTime = 0;
 
@@ -100,25 +175,17 @@ function loop(timestamp) {
 
   // --- Input ---
   if (dockedAt) {
-    // Menu navigation
+    dockMenu = buildDockMenu(dockedAt);
+    dockMenuIdx = Math.min(dockMenuIdx, dockMenu.length - 1);
+    dockMsgTimer = Math.max(0, dockMsgTimer - dt);
+    if (dockMsgTimer <= 0) dockMessage = '';
+
     if (keysJustPressed.has('KeyW') || keysJustPressed.has('ArrowUp'))
-      dockMenuIdx = (dockMenuIdx - 1 + DOCK_MENU.length) % DOCK_MENU.length;
+      dockMenuIdx = (dockMenuIdx - 1 + dockMenu.length) % dockMenu.length;
     if (keysJustPressed.has('KeyS') || keysJustPressed.has('ArrowDown'))
-      dockMenuIdx = (dockMenuIdx + 1) % DOCK_MENU.length;
-    if (keysJustPressed.has('KeyE') || keysJustPressed.has('Enter')) {
-      const choice = DOCK_MENU[dockMenuIdx];
-      if (choice === 'REFUEL') {
-        ship.boostCharge = 1.0;
-      } else if (choice === 'SAVE') {
-        try {
-          localStorage.setItem('spaceSave', JSON.stringify({
-            x: Math.round(ship.x), y: Math.round(ship.y),
-          }));
-        } catch (_) {}
-      } else if (choice === 'LEAVE') {
-        dockedAt = null;
-      }
-    }
+      dockMenuIdx = (dockMenuIdx + 1) % dockMenu.length;
+    if (keysJustPressed.has('KeyE') || keysJustPressed.has('Enter'))
+      dockMenu[dockMenuIdx]?.action?.();
     if (keysJustPressed.has('Escape')) dockedAt = null;
   } else {
     // E key priority
@@ -131,6 +198,7 @@ function loop(timestamp) {
         ship.vx = 0; ship.vy = 0;
         dockedAt = nearStation;
         dockMenuIdx = 0;
+        dockMenu = buildDockMenu(nearStation);
       } else if (nearWormhole) {
         const partner = world.anomalies.wormholes[nearWormhole.partnerId];
         const exitAngle = Math.atan2(partner.y, partner.x) + Math.PI;
@@ -146,6 +214,9 @@ function loop(timestamp) {
       }
     }
     if (keysJustPressed.has('Escape')) inspecting = null;
+
+    // Shoot (Space — held, rate-limited inside ship.shoot)
+    if (keys['Space'] && !inspecting) ship.shoot(world.bullets);
   }
 
   // --- Planet scanning (hold F) ---
@@ -154,7 +225,6 @@ function loop(timestamp) {
     if (scanTarget !== nearPlanet) { scanTarget = nearPlanet; scanProgress = 0; }
     scanProgress = Math.min(1, scanProgress + dt / SCAN_TIME);
     if (scanProgress >= 1 && !nearPlanet.scanData) {
-      // Seed scan results from planet position (deterministic)
       const seed = Math.abs(Math.round(nearPlanet.x * 7 + nearPlanet.y * 13)) % 4;
       const res  = RESOURCES[nearPlanet.type] || RESOURCES.rocky;
       nearPlanet.scanData = {
@@ -168,11 +238,32 @@ function loop(timestamp) {
   }
 
   // --- Update ---
-  world.update(dt);
+  world.update(dt, ship);
   if (!dockedAt) {
     ship.update(dt, keys);
     world.asteroids.checkCollisions(ship);
     world.anomalies.applyGravity(ship, dt);
+
+    // Pirate bullets hitting player
+    for (let bi = world.bullets.bullets.length - 1; bi >= 0; bi--) {
+      const b = world.bullets.bullets[bi];
+      if (b.fromPlayer) continue;
+      const dx = b.x - ship.x, dy = b.y - ship.y;
+      if (dx * dx + dy * dy < 22 * 22) {
+        ship.hull = Math.max(0, ship.hull - 15);
+        ship.hitFlash = 0.35;
+        world.bullets.bullets.splice(bi, 1);
+        if (ship.hull <= 0) {
+          const st = world.stations[0];
+          ship.x = st.x + 150; ship.y = st.y;
+          ship.vx = 0; ship.vy = 0;
+          ship.hull = Math.floor(ship.maxHull / 2);
+          ship.credits = Math.max(0, Math.floor(ship.credits / 2));
+          camera.x = ship.x; camera.y = ship.y;
+        }
+        break;
+      }
+    }
   }
   camera.update(dt, canvas);
 
@@ -244,7 +335,6 @@ function loop(timestamp) {
     ctx.textAlign  = 'center';
     ctx.fillText(`SCANNING  ${Math.round(scanProgress * 100)}%`, p.x, p.y - p.radius - 18);
   }
-  // Scan complete indicator + [F] hint
   if (nearPlanet && !nearPlanet.scanData && !(scanTarget === nearPlanet && scanProgress > 0)) {
     ctx.fillStyle = 'rgba(80,200,140,0.7)';
     ctx.font = '11px monospace'; ctx.textAlign = 'center';
@@ -257,7 +347,7 @@ function loop(timestamp) {
   hud.draw(ctx, canvas, ship, camera, world);
 
   if (inspecting)  drawDerelictPanel(ctx, canvas, inspecting);
-  if (dockedAt)    drawDockMenu(ctx, canvas, dockedAt, dockMenuIdx);
+  if (dockedAt)    drawDockMenu(ctx, canvas, dockedAt, dockMenuIdx, dockMenu, dockMessage);
   if (nearPlanet && nearPlanet.scanData) drawScanResults(ctx, canvas, nearPlanet);
 
   mobile.draw(ctx);
@@ -285,52 +375,90 @@ function drawDerelictPanel(ctx, canvas, d) {
   ctx.fillText('[E] or [Esc] to close', canvas.width / 2, py + ph - 12);
 }
 
-function drawDockMenu(ctx, canvas, station, idx) {
-  const pw = 340, ph = 220;
-  const px = (canvas.width - pw) / 2, py = (canvas.height - ph) / 2;
+function drawDockMenu(ctx, canvas, station, idx, menu, message) {
+  const ITEM_H = 34;
+  const pw     = 380;
+  const ph     = 52 + menu.length * ITEM_H + (message ? 26 : 4) + 24;
+  const px     = (canvas.width  - pw) / 2;
+  const py     = (canvas.height - ph) / 2;
 
-  // Panel
-  ctx.fillStyle   = 'rgba(4,10,20,0.92)';
-  ctx.strokeStyle = station.accentColor;
+  // Derive rgba from hex accent color
+  const hex = station.accentColor;
+  const n   = parseInt(hex.slice(1), 16);
+  const ar  = (n >> 16) & 0xff, ag = (n >> 8) & 0xff, ab = n & 0xff;
+  const accent = `rgba(${ar},${ag},${ab},`;
+
+  ctx.fillStyle   = 'rgba(4,10,20,0.93)';
+  ctx.strokeStyle = hex;
   ctx.lineWidth   = 1.5;
   ctx.fillRect(px, py, pw, ph);
   ctx.strokeRect(px, py, pw, ph);
 
   // Header
-  ctx.fillStyle  = station.accentColor;
-  ctx.font       = 'bold 13px monospace';
-  ctx.textAlign  = 'center';
-  ctx.fillText(`⊞  DOCKED — ${station.name}`, canvas.width / 2, py + 28);
+  ctx.fillStyle = hex;
+  ctx.font      = 'bold 13px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(`⊞  DOCKED — ${station.name}`, canvas.width / 2, py + 26);
 
-  ctx.strokeStyle = station.accentColor.replace(')', ',0.3)').replace('rgb', 'rgba');
-  ctx.lineWidth = 1; ctx.beginPath();
-  ctx.moveTo(px + 16, py + 40); ctx.lineTo(px + pw - 16, py + 40); ctx.stroke();
+  ctx.strokeStyle = `${accent}0.25)`;
+  ctx.lineWidth   = 1;
+  ctx.beginPath();
+  ctx.moveTo(px + 16, py + 36); ctx.lineTo(px + pw - 16, py + 36); ctx.stroke();
+
+  // Cargo indicator
+  const cargoUsed = Object.values(ship.cargo).reduce((a, b) => a + b, 0);
+  ctx.fillStyle = 'rgba(140,160,180,0.55)';
+  ctx.font      = '10px monospace';
+  ctx.textAlign = 'right';
+  ctx.fillText(`Credits: ${ship.credits}c   Cargo: ${cargoUsed}/${ship.CARGO_MAX}   Ammo: ${ship.ammo}`, px + pw - 14, py + 26);
 
   // Menu items
-  DOCK_MENU.forEach((item, i) => {
-    const iy      = py + 78 + i * 44;
-    const active  = i === idx;
+  menu.forEach((item, i) => {
+    const iy     = py + 48 + i * ITEM_H;
+    const active = i === idx;
+
     if (active) {
-      ctx.fillStyle = `${station.accentColor}22`;
-      ctx.fillRect(px + 12, iy - 18, pw - 24, 34);
-      ctx.strokeStyle = station.accentColor;
-      ctx.lineWidth = 1;
-      ctx.strokeRect(px + 12, iy - 18, pw - 24, 34);
+      ctx.fillStyle   = `${accent}0.12)`;
+      ctx.fillRect(px + 10, iy - 13, pw - 20, ITEM_H - 2);
+      ctx.strokeStyle = `${accent}0.7)`;
+      ctx.lineWidth   = 1;
+      ctx.strokeRect(px + 10, iy - 13, pw - 20, ITEM_H - 2);
     }
-    ctx.fillStyle  = active ? station.accentColor : 'rgba(160,180,200,0.6)';
-    ctx.font       = active ? 'bold 14px monospace' : '13px monospace';
-    ctx.textAlign  = 'center';
-    ctx.fillText(active ? `▶  ${item}` : item, canvas.width / 2, iy);
+
+    ctx.fillStyle = item.disabled
+      ? 'rgba(70,80,90,0.55)'
+      : active ? hex : 'rgba(155,175,200,0.7)';
+    ctx.font      = active && !item.disabled ? 'bold 13px monospace' : '12px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(active ? `▶  ${item.label}` : `   ${item.label}`, px + 14, iy);
+
+    if (item.note) {
+      ctx.textAlign = 'right';
+      ctx.fillStyle = item.disabled ? 'rgba(70,80,90,0.55)' : active ? hex : 'rgba(130,155,175,0.65)';
+      ctx.fillText(item.note, px + pw - 14, iy);
+    }
   });
 
-  ctx.fillStyle = 'rgba(100,130,160,0.5)'; ctx.font = '10px monospace';
-  ctx.fillText('W/S navigate  ·  E select  ·  Esc leave', canvas.width / 2, py + ph - 14);
+  // Status message
+  if (message) {
+    const my = py + 48 + menu.length * ITEM_H + 6;
+    ctx.fillStyle = 'rgba(120,255,180,0.85)';
+    ctx.font      = '11px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(message, canvas.width / 2, my);
+  }
+
+  // Footer
+  ctx.fillStyle = 'rgba(90,115,145,0.55)';
+  ctx.font      = '10px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('W/S navigate   ·   E select   ·   Esc leave', canvas.width / 2, py + ph - 10);
 }
 
 function drawScanResults(ctx, canvas, p) {
   const d   = p.scanData;
   const pw  = 240, ph = 110;
-  const px  = canvas.width - pw - 200, py = 16; // top-right area, left of minimap
+  const px  = canvas.width - pw - 200, py = 16;
   ctx.fillStyle   = 'rgba(4,12,8,0.88)';
   ctx.strokeStyle = 'rgba(80,220,150,0.5)';
   ctx.lineWidth   = 1;

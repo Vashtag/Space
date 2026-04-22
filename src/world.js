@@ -108,7 +108,7 @@ export class World {
   get stations() { return this.stationManager.stations; }
   get spawnPoint() { return this.stationManager.spawnPoint; }
 
-  update(dt) {
+  update(dt, ship) {
     // Solar flare spawning
     this._flareTimer -= dt;
     if (this._flareTimer <= 0) {

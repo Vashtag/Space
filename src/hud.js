@@ -3,13 +3,23 @@ const MM_PAD    = 16;
 const MM_SCALE  = MM_SIZE / 2 / 20000;
 
 export class HUD {
-  draw(ctx, canvas, ship, camera, world) {
-    this._drawStatusPanel(ctx, canvas, ship);
-    this._drawMinimap(ctx, canvas, ship, world);
+  draw(ctx, canvas, ship, camera, world, mode) {
+    this._drawStatusPanel(ctx, canvas, ship, mode);
+    this._drawMinimap(ctx, canvas, ship, world, mode);
     this._drawControls(ctx, canvas);
+    this._drawModeBadge(ctx, canvas, mode);
     if (ship.orbiting && ship.orbitTarget) {
       this._drawOrbitStatus(ctx, canvas, ship);
     }
+  }
+
+  _drawModeBadge(ctx, canvas, mode) {
+    const label = mode === 'explore' ? '◈  EXPLORE MODE' : '⚔  CAREER MODE';
+    const color = mode === 'explore' ? 'rgba(60,210,160,0.75)' : 'rgba(220,130,60,0.75)';
+    ctx.fillStyle = color;
+    ctx.font      = '10px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(label, canvas.width - 16, 14);
   }
 
   _drawOrbitStatus(ctx, canvas, ship) {
@@ -24,7 +34,7 @@ export class HUD {
     ctx.fillText(label, bx, by);
   }
 
-  _drawStatusPanel(ctx, canvas, ship) {
+  _drawStatusPanel(ctx, canvas, ship, mode) {
     const barW   = 140;
     const barH   = 6;
     const bx     = 20;
@@ -40,14 +50,19 @@ export class HUD {
 
     // ── Credits & Ammo ──
     const cyC = panelT + 14;
-    ctx.fillStyle = 'rgba(255,210,80,0.85)';
     ctx.font      = '10px monospace';
     ctx.textAlign = 'left';
-    ctx.fillText(`CREDITS  ${ship.credits}c`, bx, cyC);
-
-    const ammoColor = ship.ammo === 0 ? 'rgba(255,80,60,0.85)' : 'rgba(160,220,255,0.85)';
-    ctx.fillStyle = ammoColor;
-    ctx.fillText(`AMMO  ${ship.ammo}`, bx, cyC + 14);
+    if (mode === 'explore') {
+      ctx.fillStyle = 'rgba(60,210,160,0.7)';
+      ctx.fillText('CREDITS  ∞', bx, cyC);
+      ctx.fillText('AMMO  ∞',    bx, cyC + 14);
+    } else {
+      ctx.fillStyle = 'rgba(255,210,80,0.85)';
+      ctx.fillText(`CREDITS  ${ship.credits}c`, bx, cyC);
+      const ammoColor = ship.ammo === 0 ? 'rgba(255,80,60,0.85)' : 'rgba(160,220,255,0.85)';
+      ctx.fillStyle = ammoColor;
+      ctx.fillText(`AMMO  ${ship.ammo}`, bx, cyC + 14);
+    }
 
     // ── Hull bar ──
     const cyHull  = panelT + 46;
@@ -100,7 +115,7 @@ export class HUD {
     );
   }
 
-  _drawMinimap(ctx, canvas, ship, world) {
+  _drawMinimap(ctx, canvas, ship, world, mode) {
     const mx = canvas.width  - MM_SIZE - MM_PAD;
     const my = canvas.height - MM_SIZE - MM_PAD;
     const cx = mx + MM_SIZE / 2;
@@ -149,8 +164,8 @@ export class HUD {
       ctx.strokeRect(sx - 3, sy - 3, 6, 6);
     }
 
-    // Pirates (red diamonds)
-    for (const p of world.pirates.pirates) {
+    // Pirates (red diamonds — career only)
+    for (const p of (mode === 'explore' ? [] : world.pirates.pirates)) {
       if (!p.alive) continue;
       const px = cx + p.x * MM_SCALE;
       const py = cy + p.y * MM_SCALE;

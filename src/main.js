@@ -32,6 +32,11 @@ const starfield = new Starfield(42);
 const hud       = new HUD();
 const mobile    = new MobileControls(canvas, keys, keysJustPressed);
 
+// ── Mode selection ────────────────────────────────────────────────────────────
+let gameState = 'menu';   // 'menu' | 'playing'
+let gameMode  = 'career'; // 'explore' | 'career'
+let menuIdx   = 0;        // 0 = explore, 1 = career
+
 const ORBIT_RANGE     = 185;
 const DERELICT_RANGE  = 220;
 const WORMHOLE_RANGE  = 80;
@@ -144,6 +149,27 @@ function loop(timestamp) {
   const dt = Math.min((timestamp - lastTime) / 1000, 0.05);
   lastTime = timestamp;
 
+  // ── Mode select screen ────────────────────────────────────────────────────
+  if (gameState === 'menu') {
+    if (keysJustPressed.has('KeyW') || keysJustPressed.has('ArrowUp'))
+      menuIdx = (menuIdx - 1 + 2) % 2;
+    if (keysJustPressed.has('KeyS') || keysJustPressed.has('ArrowDown'))
+      menuIdx = (menuIdx + 1) % 2;
+    if (keysJustPressed.has('KeyE') || keysJustPressed.has('Enter') || keysJustPressed.has('Space')) {
+      gameMode  = menuIdx === 0 ? 'explore' : 'career';
+      gameState = 'playing';
+      if (gameMode === 'explore') { ship.ammo = 9999; ship.credits = 9999; }
+    }
+
+    ctx.fillStyle = '#00000f';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    starfield.draw(ctx, canvas, camera);
+    drawModeSelect(ctx, canvas, menuIdx);
+    keysJustPressed.clear();
+    requestAnimationFrame(loop);
+    return;
+  }
+
   // --- Proximity (skip most when docked) ---
   if (!dockedAt) {
     nearPlanet = null;
@@ -238,7 +264,8 @@ function loop(timestamp) {
   }
 
   // --- Update ---
-  world.update(dt, ship);
+  if (gameMode === 'explore') { ship.ammo = 9999; ship.credits = 9999; }
+  world.update(dt, ship, gameMode);
   if (!dockedAt) {
     ship.update(dt, keys);
     world.asteroids.checkCollisions(ship);
@@ -275,7 +302,7 @@ function loop(timestamp) {
 
   ctx.save();
   ctx.translate(canvas.width / 2 - camera.x, canvas.height / 2 - camera.y);
-  world.draw(ctx, camera, canvas);
+  world.draw(ctx, camera, canvas, gameMode);
 
   // Orbit prompt
   const orbitTarget = ship.orbiting ? ship.orbitTarget : nearPlanet;
@@ -344,7 +371,7 @@ function loop(timestamp) {
   ship.draw(ctx);
   ctx.restore();
 
-  hud.draw(ctx, canvas, ship, camera, world);
+  hud.draw(ctx, canvas, ship, camera, world, gameMode);
 
   if (inspecting)  drawDerelictPanel(ctx, canvas, inspecting);
   if (dockedAt)    drawDockMenu(ctx, canvas, dockedAt, dockMenuIdx, dockMenu, dockMessage);
@@ -472,6 +499,95 @@ function drawScanResults(ctx, canvas, p) {
   ctx.fillText(`Temp:       ${d.temp}`,             px + 12, py + 56);
   ctx.fillText(`Danger:     ${d.danger}`,           px + 12, py + 72);
   ctx.fillText(`Resources:  ${d.resources.join(', ')}`, px + 12, py + 88);
+}
+
+function drawModeSelect(ctx, canvas, idx) {
+  const CW = canvas.width, CH = canvas.height;
+  const cx = CW / 2;
+
+  // Title
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(160,200,255,0.9)';
+  ctx.font      = 'bold 22px monospace';
+  ctx.fillText('SPACE EXPLORER', cx, CH * 0.18);
+  ctx.fillStyle = 'rgba(100,140,200,0.55)';
+  ctx.font      = '11px monospace';
+  ctx.fillText('SELECT YOUR MODE', cx, CH * 0.18 + 22);
+
+  const modes = [
+    {
+      key:   'explore',
+      icon:  '◈',
+      title: 'EXPLORE MODE',
+      color: '#3cd2a0',
+      lines: ['Unlimited credits & ammo', 'No pirates or threats', 'Scan planets, find derelicts', 'Travel through wormholes', 'Pure exploration experience'],
+    },
+    {
+      key:   'career',
+      icon:  '⚔',
+      title: 'CAREER MODE',
+      color: '#dc823c',
+      lines: ['Start with 150 credits', 'Buy ammo to shoot', 'Trade cargo between stations', 'Evade or destroy pirates', 'Full economy & combat'],
+    },
+  ];
+
+  const cardW  = Math.min(320, CW * 0.82);
+  const cardH  = 166;
+  const gap    = 18;
+  const totalH = modes.length * cardH + (modes.length - 1) * gap;
+  let   cardY  = CH * 0.5 - totalH / 2;
+
+  for (let i = 0; i < modes.length; i++) {
+    const m      = modes[i];
+    const active = i === idx;
+    const cx2    = cx - cardW / 2;
+
+    // Card background
+    const n  = parseInt(m.color.slice(1), 16);
+    const cr = (n >> 16) & 0xff, cg = (n >> 8) & 0xff, cb = n & 0xff;
+
+    ctx.fillStyle   = active ? `rgba(${cr},${cg},${cb},0.10)` : 'rgba(8,14,28,0.72)';
+    ctx.strokeStyle = active ? m.color : `rgba(${cr},${cg},${cb},0.28)`;
+    ctx.lineWidth   = active ? 2 : 1;
+    ctx.fillRect(cx2, cardY, cardW, cardH);
+    ctx.strokeRect(cx2, cardY, cardW, cardH);
+
+    // Icon + title
+    ctx.textAlign = 'left';
+    ctx.fillStyle = active ? m.color : `rgba(${cr},${cg},${cb},0.5)`;
+    ctx.font      = `bold ${active ? 15 : 14}px monospace`;
+    ctx.fillText(`${m.icon}  ${m.title}`, cx2 + 18, cardY + 28);
+
+    // Divider
+    ctx.strokeStyle = active ? `rgba(${cr},${cg},${cb},0.3)` : `rgba(${cr},${cg},${cb},0.12)`;
+    ctx.lineWidth   = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx2 + 14, cardY + 38); ctx.lineTo(cx2 + cardW - 14, cardY + 38);
+    ctx.stroke();
+
+    // Description lines
+    ctx.font      = '11px monospace';
+    ctx.fillStyle = active ? 'rgba(210,225,240,0.85)' : 'rgba(110,130,155,0.6)';
+    for (let li = 0; li < m.lines.length; li++) {
+      ctx.fillText(`·  ${m.lines[li]}`, cx2 + 18, cardY + 58 + li * 19);
+    }
+
+    // Selected indicator
+    if (active) {
+      ctx.textAlign = 'right';
+      ctx.fillStyle = m.color;
+      ctx.font      = '11px monospace';
+      ctx.fillText('▶ SELECTED', cx2 + cardW - 14, cardY + cardH - 12);
+    }
+
+    cardY += cardH + gap;
+  }
+
+  // Footer hints
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(80,100,150,0.6)';
+  ctx.font      = '10px monospace';
+  ctx.fillText('W / S  or  ↑ / ↓  to choose   ·   E or Enter to confirm', cx, CH * 0.94);
 }
 
 requestAnimationFrame(ts => { lastTime = ts; requestAnimationFrame(loop); });

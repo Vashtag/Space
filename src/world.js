@@ -108,7 +108,7 @@ export class World {
   get stations() { return this.stationManager.stations; }
   get spawnPoint() { return this.stationManager.spawnPoint; }
 
-  update(dt, ship) {
+  update(dt, ship, mode) {
     // Solar flare spawning
     this._flareTimer -= dt;
     if (this._flareTimer <= 0) {
@@ -143,10 +143,10 @@ export class World {
     this.derelicts.update(dt);
     this.anomalies.update(dt);
     this.bullets.update(dt);
-    if (ship) this.pirates.update(dt, ship, this.bullets);
+    if (ship && mode !== 'explore') this.pirates.update(dt, ship, this.bullets);
   }
 
-  draw(ctx, camera, canvas) {
+  draw(ctx, camera, canvas, mode) {
 
     // World boundary ring
     ctx.save();
@@ -178,7 +178,7 @@ export class World {
     this.stationManager.draw(ctx);
     this.derelicts.draw(ctx);
     this.anomalies.draw(ctx);
-    this.pirates.draw(ctx);
+    if (mode !== 'explore') this.pirates.draw(ctx);
     this.bullets.draw(ctx);
   }
 
